@@ -16,7 +16,7 @@ var vue_options = {
         config: {
             channelId: "test",
             clientId: "test",
-            signalingUrl: "wss://asus.poruru.work/signaling"
+            signalingUrl: "wss://hogehoge.com/signaling"
         },
         param_start: {
             role: "master",
