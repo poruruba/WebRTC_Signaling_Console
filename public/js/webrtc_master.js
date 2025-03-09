@@ -1,17 +1,15 @@
 class WebrtcMaster {
-    // signalingUrl, apikey
-    constructor(signalingUrl, apikey){
+    constructor(signalingUrl){
         this.signalingUrl = signalingUrl;
-        this.apikey = apikey;
         this.peerList = [];
         this.signalingClient = null;
     }
     
-    // params: localStream, channelId, dataLabel, clientId, password, requestOffer
+    // params: localStream, channelId, clientId, password, dataLabel, requestOffer
     async start(params, callback) {
         this.stop();
 
-        this.signalingClient = new WebrtcSignalingClient("master", this.signalingUrl, this.apikey);
+        this.signalingClient = new WebrtcSignalingClient("master", this.signalingUrl);
 
         this.signalingClient.on('open', async () => {
             if (callback) callback('signaling', { type: 'opened' });
@@ -25,17 +23,15 @@ class WebrtcMaster {
             if (callback) callback('signaling', { type: 'error', message: message });
         });
 
-        this.signalingClient.on('iceCandidate', (candidate, remoteClientId) => {
+        this.signalingClient.on('iceCandidate', async (candidate, remoteClientId) => {
             if (candidate){
                 var peer = this.peerList.find(item => item.clientId == remoteClientId);
                 if( peer )
-                    peer.peerConnection.addIceCandidate(candidate);
+                    await peer.peerConnection.addIceCandidate(candidate);
             }
         });
 
         this.signalingClient.on('sdpOffer', async (offer, remoteClientId) => {
-            if (callback) callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
-
             var peer = this.peerList.find(item => item.clientId == remoteClientId );
             if( peer )
                 peer.peerConnection.close();
@@ -55,12 +51,14 @@ class WebrtcMaster {
                 peer = {
                     clientId: remoteClientId,
                     peerConnection: peerConnection,
-                    tracks: []
+                    tracks: [],
+                    dataChannel: null
                 };
                 this.peerList.push(peer);
             }
             
             await peerConnection.setRemoteDescription(offer);
+            if (callback) callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
 
             if (params.dataLabel) {
                 peer.dataChannel = peerConnection.createDataChannel(params.dataLabel);
@@ -106,7 +104,7 @@ class WebrtcMaster {
             await peerConnection.setLocalDescription(answer);
 
             this.signalingClient.sendSdpAnswer(answer, remoteClientId);
-            if (callback) callback('peer', { type: 'sdpOfferAnswer', remoteClientId: remoteClientId });
+            if (callback) callback('peer', { type: 'sdpAnswering', remoteClientId: remoteClientId });
 
             if( params.requestOffer ){
                 this.signalingClient.on('sdpAnswer', async answer => {
@@ -116,12 +114,10 @@ class WebrtcMaster {
                     }
                 });
 
-                var offer = await peerConnection.createOffer(
-                    {
-                        offerToReceiveAudio: true,
-                        offerToReceiveVideo: true,
-                    }
-                );
+                var offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true,
+                });
                 await peerConnection.setLocalDescription(offer);
 
                 this.signalingClient.sendSdpOffer(offer, remoteClientId);
@@ -165,7 +161,7 @@ class WebrtcMaster {
     }
 
     sendMessage(message, remoteClientId) {
-        console.log("call: sendMasterMessage");
+//        console.log("call: sendMasterMessage");
 
         if (remoteClientId) {
             var peer = this.peerList.find(item => item.clientId == remoteClientId);

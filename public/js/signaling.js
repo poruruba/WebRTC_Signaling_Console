@@ -2,11 +2,10 @@ const WEBRTC_PING_MESSAGE = "9ca3b441-9558-4ba2-afbf-ebd518ecdc03";
 const WEBRTC_PONG_MESSAGE = "9ca3b442-9558-4ba2-afbf-ebd518ecdc03";
 
 class WebrtcSignalingClient{
-  constructor(role, url, apikey){
+  constructor(role, url){
     this.role = role;
-    this.callbacks = [];
     this.url = url;
-    this.apikey = apikey;
+    this.callbacks = [];
   }
 
   open(channelId, clientId, password){
@@ -15,14 +14,15 @@ class WebrtcSignalingClient{
 
     this.ws_socket = new WebSocket(this.url);
 
+    // Websocket接続時処理
     this.ws_socket.onopen = (event) => {
 //      console.log("websocket opened", event);
 
+      // readyの送信
       this.ws_socket.send(JSON.stringify({
         type: "ready",
         role: this.role,
         clientId: this.clientId,
-        apikey: this.apikey,
         channelId: this.channelId,
         password: password
       }));
@@ -47,6 +47,7 @@ class WebrtcSignalingClient{
     };
 
     this.ws_socket.onmessage = (event) => {
+      // Websocket接続維持処理
       if( event.data == WEBRTC_PING_MESSAGE ){
         this.ws_socket.send(WEBRTC_PONG_MESSAGE);
         return;
@@ -62,20 +63,10 @@ class WebrtcSignalingClient{
         if( callback )
           callback.callback(body.clients, body.clientId);
       }else
-      if( body.type == "answer"){
-        var callback = this.callbacks.find(item => item.type == "sdpAnswer" );
+      if( body.type == "sdpAnswer" || body.type == "sdpOffer" || body.type == "iceCandidate" ){
+        var callback = this.callbacks.find(item => item.type == body.type );
         if( callback )
-          callback.callback(body.answer, body.clientId);
-      }else
-      if( body.type == "candidate" ){
-        var callback = this.callbacks.find(item => item.type == "iceCandidate" );
-        if( callback )
-          callback.callback(body.candidate, body.clientId);
-      }else
-      if( body.type == "offer" ){
-        var callback = this.callbacks.find(item => item.type == "sdpOffer" );
-        if( callback )
-          callback.callback(body.offer, body.clientId);
+          callback.callback(body.data, body.clientId);
       }else
       if( body.type == 'error' ){
         var callback = this.callbacks.find(item => item.type == "error" );
@@ -92,7 +83,7 @@ class WebrtcSignalingClient{
     this.clientId = null;
   }
 
-  // type=ready, open, sdpOffer, sdpAnswer, iceCandidate, close, error
+  // type=ready, open, ready, sdpOffer, sdpAnswer, iceCandidate, close, error
   on(type, callback){
     var item = this.callbacks.find(item => item.type == type);
     if(!item){
@@ -104,31 +95,31 @@ class WebrtcSignalingClient{
 
   sendSdpOffer(offer, remoteClientId){
     this.ws_socket.send(JSON.stringify({
-      type: "offer",
+      type: "sdpOffer",
       clientId: this.clientId,
       channelId: this.channelId,
-      offer: offer,
-      target: remoteClientId
+      target: remoteClientId,
+      data: offer
     }));
   }
 
   sendIceCandidate(candidate, remoteClientId){
     this.ws_socket.send(JSON.stringify({
-      type: "candidate",
+      type: "iceCandidate",
       clientId: this.clientId,
       channelId: this.channelId,
       target: remoteClientId,
-      candidate: candidate
+      data: candidate
     }));
   }
 
   sendSdpAnswer(answer, remoteClientId){
     this.ws_socket.send(JSON.stringify({
-      type: "answer",
+      type: "sdpAnswer",
       clientId: this.clientId,
       channelId: this.channelId,
       target: remoteClientId,
-      answer: answer,
+      data: answer,
     }));
   }  
 }

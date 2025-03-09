@@ -1,8 +1,6 @@
 class WebrtcSlave {
-    // signalingUrl, apikey
-    constructor(signalingUrl, apikey) {
+    constructor(signalingUrl) {
         this.signalingUrl = signalingUrl;
-        this.apikey = apikey;
         this.signalingClient = null;
         this.peerConnection = null;
         this.dataChannel = null;
@@ -65,12 +63,10 @@ class WebrtcSlave {
             if (this.callback) this.callback('peer', { type: 'signalingstatechange', signalingState: event.target.signalingState });
         });
 
-        var offer = await this.peerConnection.createOffer(
-            {
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: true,
-            }
-        );
+        var offer = await this.peerConnection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+        });
         await this.peerConnection.setLocalDescription(offer);
 
         this.signalingClient.sendSdpOffer(offer, remoteClientId);
@@ -83,7 +79,7 @@ class WebrtcSlave {
 
         this.callback = callback;
 
-        this.signalingClient = new WebrtcSignalingClient("slave", this.signalingUrl, this.apikey);
+        this.signalingClient = new WebrtcSignalingClient("slave", this.signalingUrl);
 
         this.signalingClient.on('open', async () => {
             if (callback) callback('signaling', { type: 'opened' });
@@ -98,16 +94,13 @@ class WebrtcSlave {
         });
 
         this.signalingClient.on('sdpAnswer', async (answer, remoteClientId) => {
-            if (this.peerConnection) {
-                await this.peerConnection.setRemoteDescription(answer);
-                if (callback) callback('peer', { type: 'sdpAnswered', remoteClientId: remoteClientId });
-            }
+            await this.peerConnection.setRemoteDescription(answer);
+            if (callback) callback('peer', { type: 'sdpAnswered', remoteClientId: remoteClientId });
         });
 
         this.signalingClient.on('sdpOffer', async (offer, remoteClientId) => {
-            if (callback) callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
-
             await this.peerConnection.setRemoteDescription(offer);
+            if (callback) callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
 
             if( this.localStream ){
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
@@ -116,12 +109,12 @@ class WebrtcSlave {
             var answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
             this.signalingClient.sendSdpAnswer(answer, remoteClientId);
-            if (callback) callback('peer', { type: 'sdpOfferAnswer', remoteClientId: remoteClientId });
+            if (callback) callback('peer', { type: 'sdpAnswering', remoteClientId: remoteClientId });
         });
 
-        this.signalingClient.on('iceCandidate', (candidate, remoteClientId) => {
-            if (this.peerConnection && candidate) {
-                this.peerConnection.addIceCandidate(candidate);
+        this.signalingClient.on('iceCandidate', async (candidate, remoteClientId) => {
+            if (candidate) {
+                await this.peerConnection.addIceCandidate(candidate);
             }
         });
 
@@ -130,7 +123,6 @@ class WebrtcSlave {
         });
 
         this.signalingClient.open(params.channelId, params.clientId, params.password);
-
         if (callback) callback('signaling', { type: 'opening' });
     }
 
@@ -142,21 +134,13 @@ class WebrtcSlave {
     }
     
     stop() {
-        if (this.signalingClient) {
-            this.signalingClient.close();
-            this.signalingClient = null;
-        }
-
         this.disconnect();
         this.channelId = null;
         this.clientId = null;
     }
 
     sendMessage(message) {
-        if (!this.dataChannel)
-            throw new Error("datachannel not exist");
-
-        if (this.dataChannel.readyState != "open")
+        if (!this.dataChannel || this.dataChannel.readyState != "open")
             throw new Error("client not ready");
 
         this.dataChannel.send(message);

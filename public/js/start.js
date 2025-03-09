@@ -20,7 +20,7 @@ var vue_options = {
         },
         param_start: {
             role: "master",
-            localstream: "camera_user"
+            localstream_type: "camera_user"
         },
         has_displaymedia: false,
         remoteClient: {},
@@ -28,17 +28,23 @@ var vue_options = {
         remoteClientList: [],
         selectedRemoteClient: null,
         currentRole: null,
+        dataMessage: "",
+        dataMessageLog: ""
     },
     computed: {
     },
     methods: {
         select_remoteClient: async function(){
-            this.remoteClient = this.selectedRemoteClient;
-            var mediaStream = this.master.getMediaStream(this.remoteClient.clientId);
-            if( mediaStream ){
+            if( this.selectedRemoteClient ){
+                var mediaStream = this.master.getMediaStream(this.selectedRemoteClient.clientId);
+                if( mediaStream ){
+                    const video = document.querySelector('#remotecamera_view');
+                    video.srcObject = mediaStream;
+                }
+            }else{
                 const video = document.querySelector('#remotecamera_view');
-                video.srcObject = mediaStream;
-            }
+                video.srcObject = null;
+        }
         },
         change_config: function () {
             localStorage.setItem("config", JSON.stringify(this.config));
@@ -71,7 +77,7 @@ var vue_options = {
                 localStream: this.localStream,
                 channelId: this.config.channelId,
                 clientId: this.config.clientId,
-                dataLabel: this.config.dataLavel,
+                dataLabel: this.config.dataLabel,
                 password: this.config.password || "",
                 requestOffer: true
             };
@@ -93,8 +99,13 @@ var vue_options = {
                 }else if( type == "signaling" ){
                     if( result.type == "closed" ){
                         alert("接続が切断されました。");
+                        this.remoteClientList = this.master.getRemoteClientList();
                     }else if( result.type == "error"){
                         alert(result.message);
+                    }
+                }else if( type == "data" ){
+                    if( result.type == "message" ){
+                        this.dataMessageLog += `(${result.remoteClientId}) ${result.data}\n`;
                     }
                 }
             });
@@ -102,7 +113,7 @@ var vue_options = {
         connect_slave: async function (remoteClient) {
             this.dialog_close('#connect_dialog');
             this.remoteClient = remoteClient;
-            this.slave.connect(remoteClient.clientId, { localStream: this.localStream });
+            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: this.config.dataLabel});
         },
         start_slave: async function () {
             try {
@@ -123,7 +134,6 @@ var vue_options = {
                     channelId: this.config.channelId,
                     clientId: this.config.clientId,
                     password: this.config.password || "" ,
-                    dataLabel: this.config.dataLavel,
                 };
                 this.slave.start(params, (type, result) => {
                     console.log(type, result);
@@ -144,8 +154,9 @@ var vue_options = {
                             }
                         }else
                         if( result.type == "connectionstatechange") {
-                            if( result.connectionState == "disconnected")
+                            if( result.connectionState == "disconnected"){
                                 this.toast_show("接続が切断されました。");
+                            }
                         }
                     } else if (type == "signaling") {
                         if (result.type == "ready") {
@@ -164,11 +175,26 @@ var vue_options = {
                                 alert(result.message);
                             }
                         }
+                    }else if( type == "data" ){
+                        if( result.type == "message"){
+                            this.dataMessageLog += `${result.data}\n`;
+                        }
                     }
                 });
             } catch (error) {
                 console.error(error);
                 alert(error);
+            }
+        },
+        sendDataMessage: async function(){
+            console.log("sendDataMessage called");
+            if(this.currentRole == "master"){
+                if( this.selectedRemoteClient)
+                    this.master.sendMessage(this.dataMessage, this.selectedRemoteClient.clientId);
+                else
+                    this.master.sendMessage(this.dataMessage);
+            }else if( this.currentRole == "slave"){
+                this.slave.sendMessage(this.dataMessage);
             }
         },
         onResize: function () {
@@ -194,10 +220,10 @@ var vue_options = {
         if (config) {
             this.config = JSON.parse(config);
         }else{
-            this.config.signalingUrl = "wss://" + location.host + "/signaling";
+            this.config.signalingUrl = ((location.protocol == "https:") ? "wss://" : "ws://") + location.host + "/signaling";
         }
-        this.slave = new WebrtcSlave(this.config.signalingUrl, this.config.apiKey);
-        this.master = new WebrtcMaster(this.config.signalingUrl, this.config.apiKey);
+        this.slave = new WebrtcSlave(this.config.signalingUrl);
+        this.master = new WebrtcMaster(this.config.signalingUrl);
 
         this.onResize();
         window.addEventListener('resize', this.onResize);
