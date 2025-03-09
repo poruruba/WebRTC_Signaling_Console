@@ -27,8 +27,8 @@ exports.handler = async (event, context, callback) => {
 };
 
 exports.ws_handler = async (event, context) => {
-  console.log(event);
-  console.log(context);
+//  console.log(event);
+//  console.log(context);
 
   if( event.body == WEBRTC_PING_MESSAGE ){
     await context.wslib.postToConnection({
