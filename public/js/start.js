@@ -44,7 +44,7 @@ var vue_options = {
             }else{
                 const video = document.querySelector('#remotecamera_view');
                 video.srcObject = null;
-        }
+            }
         },
         change_config: function () {
             localStorage.setItem("config", JSON.stringify(this.config));
