@@ -60,55 +60,59 @@ var vue_options = {
             this.dialog_close('#start_dialog');
         },
         start_master: async function () {
-            if (this.param_start.localstream_type == 'screen') {
-                this.localStream = await navigator.mediaDevices.getDisplayMedia({ video: {}, audio: true });
-            } else {
-                var facingMode = (this.param_start.localstream_type == 'camera_enviroment') ? 'environment' : 'user';
-                const constraints = {
-                    video: { facingMode: facingMode },
-                    audio: { echoCancellation: true, noiseSuppression: true },
-                };
-                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            }
-            const video = document.querySelector('#localcamera_view');
-            video.srcObject = this.localStream;
-
-            var params = {
-                localStream: this.localStream,
-                channelId: this.config.channelId,
-                clientId: this.config.clientId,
-                dataLabel: this.config.dataLabel,
-                password: this.config.password || "",
-                requestOffer: true
-            };
-            this.master.start(params, (type, result) => {
-                console.log(type, result);
-                if (type == "peer") {
-                    if (result.type == "sdpOffering") {
-                        tracks = [];
-                    } else
-                    if (result.type == "track") {
-                        this.remoteClientList = this.master.getRemoteClientList();
-                        this.toast_show(result.remoteClientId + 'が接続されました。');
-                    }else
-                    if( result.type == "connectionstatechange") {
-                        this.remoteClientList = this.master.getRemoteClientList();
-                        if( result.connectionState == "disconnected")
-                            this.toast_show(result.remoteClientId + "との接続が切断されました。");
-                    }
-                }else if( type == "signaling" ){
-                    if( result.type == "closed" ){
-                        alert("接続が切断されました。");
-                        this.remoteClientList = this.master.getRemoteClientList();
-                    }else if( result.type == "error"){
-                        alert(result.message);
-                    }
-                }else if( type == "data" ){
-                    if( result.type == "message" ){
-                        this.dataMessageLog += `(${result.remoteClientId}) ${result.data}\n`;
-                    }
+            try{
+                if (this.param_start.localstream_type == 'screen') {
+                    this.localStream = await navigator.mediaDevices.getDisplayMedia({ video: {}, audio: true });
+                } else {
+                    var facingMode = (this.param_start.localstream_type == 'camera_enviroment') ? 'environment' : 'user';
+                    const constraints = {
+                        video: { facingMode: facingMode },
+                        audio: { echoCancellation: true, noiseSuppression: true },
+                    };
+                    this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 }
-            });
+                const video = document.querySelector('#localcamera_view');
+                video.srcObject = this.localStream;
+
+                var params = {
+                    localStream: this.localStream,
+                    channelId: this.config.channelId,
+                    clientId: this.config.clientId,
+                    dataLabel: this.config.dataLabel,
+                    password: this.config.password || "",
+                    requestOffer: true
+                };
+                this.master.start(params, (type, result) => {
+                    console.log(type, result);
+                    if (type == "peer") {
+                        if (result.type == "sdpOffering") {
+                            tracks = [];
+                        } else
+                        if (result.type == "track") {
+                            this.remoteClientList = this.master.getRemoteClientList();
+                            this.toast_show(result.remoteClientId + 'が接続されました。');
+                        }else
+                        if( result.type == "connectionstatechange") {
+                            this.remoteClientList = this.master.getRemoteClientList();
+                            if( result.connectionState == "disconnected")
+                                this.toast_show(result.remoteClientId + "との接続が切断されました。");
+                        }
+                    }else if( type == "signaling" ){
+                        if( result.type == "closed" ){
+                            this.toast_show("接続が切断されました。");
+                            this.remoteClientList = this.master.getRemoteClientList();
+                        }else if( result.type == "error"){
+                            this.toast_show(result.message);
+                        }
+                    }else if( type == "data" ){
+                        if( result.type == "message" ){
+                            this.dataMessageLog += `(${result.remoteClientId}) ${result.data}\n`;
+                        }
+                    }
+                });
+            }catch(error){
+                this.toast_show(error);
+            }
         },
         connect_slave: async function (remoteClient) {
             this.dialog_close('#connect_dialog');
@@ -170,9 +174,9 @@ var vue_options = {
                             }
                         }else if( type == "signaling" ){
                             if( result.type == "closed" ){
-                                alert("接続が切断されました。");
+                                this.toast_show("接続が切断されました。");
                             }else if( result.type == "error"){
-                                alert(result.message);
+                                this.toast_show(result.message);
                             }
                         }
                     }else if( type == "data" ){
@@ -183,7 +187,7 @@ var vue_options = {
                 });
             } catch (error) {
                 console.error(error);
-                alert(error);
+                this.toast_show(error);
             }
         },
         sendDataMessage: async function(){
