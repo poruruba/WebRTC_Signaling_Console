@@ -1,0 +1,7 @@
+{
+	"enable": true,
+	"handler": "ws_handler",
+	"stage": "signaling",
+	"connect_handler": "connect_handler",
+	"disconnect_handler": "disconnect_handler"
+}

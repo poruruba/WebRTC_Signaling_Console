@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src * data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src * 'unsafe-inline'; media-src *; img-src * data: content: blob:;">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width">
+
+  <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+  <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha384-nvAa0+6Qg9clwYCGGPpDQLVpLNn0fRaROjHqs13t4Ggj3Ez50XnGQqc/r8MhnRDZ" crossorigin="anonymous"></script>
+  <!-- Latest compiled and minified CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css" integrity="sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu" crossorigin="anonymous">
+  <!-- Optional theme -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css" integrity="sha384-6pzBo3FDv/PJ8r2KRkGHifhEocL+1X2rVCTTkUfGk7/0pbek5mMa1upzvWbrUbOZ" crossorigin="anonymous">
+  <!-- Latest compiled and minified JavaScript -->
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd" crossorigin="anonymous"></script>
+
+  <link rel="stylesheet" href="css/start.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/spinkit/2.0.1/spinkit.min.css" />
+  <script src="js/methods_bootstrap.js"></script>
+  <script src="js/components_bootstrap.js"></script>
+  <script src="js/components_utils.js"></script>
+  <script src="js/vue_utils.js"></script>
+  <script src="js/gql_utils.js"></script>
+
+  <script src="js/remoteconsole.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vconsole/dist/vconsole.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuex@3.x/dist/vuex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue-router@3.x/dist/vue-router.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+  <title>WebRTC Space</title>
+</head>
+<body>
+<!--
+    <div id="loader-background">
+      <div class="sk-plane sk-center"></div>
+    </div>
+-->
+    <div id="top" class="container">
+      <div class="jumbotron">
+        <h3>WebRTC Space</h3>
+      </div>
+        <button class="btn btn-default btn-sm pull-right" v-on:click="dialog_open('#config_dialog')">設定</button>
+
+        <button class="btn btn-primary btn-lg" v-on:click="dialog_open('#start_dialog')">start</button>
+        <label>currentRole</label> {{currentRole}} <label>channelId</label> {{config.channelId}} <label>clientId</label> {{config.clientId}}<br>
+        <br>
+
+        <div v-if="currentRole=='master'" class="form-inline">
+          <label>remoteClientList</label>
+          <select class="form-control" v-model="selectedRemoteClient">
+            <option v-for="(item, index) in remoteClientList" v-bind:value="item">{{item.clientId}}</option>
+          </select> <button class="btn btn-default" v-on:click="select_remoteClient">選択</button>
+        </div>
+        <br>
+
+        <div class="row">
+          <div class="col-sm-9">
+            <div class="panel panel-primary">
+              <div class="panel-heading">
+                相手：{{remoteClient.clientId}}
+              </div>
+              <div class="panel-body" id="div_remotecamera_view">
+                <video id="remotecamera_view" class="img-responsive" autoplay controls />
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-3">
+            <div class="panel panel-primary">
+              <div class="panel-heading">
+                自分：{{config.clientId}}
+              </div>
+              <div class="panel-body" id="div_localcamera_view">
+                <video id="localcamera_view" class="img-responsive" autoplay controls muted />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal fade" id="config_dialog">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h4 class="modal-title">設定</h4></div>
+              <div class="modal-body">
+                <label>接続先URL</label> <input type="text" class="form-control" v-model="config.signalingUrl"><br>
+                <label>ApiKey</label> <input type="text" class="form-control" v-model="config.apiKey"><br>
+                <label>チャンネルID</label> <input type="text" class="form-control" v-model="config.channelId"><br>
+                <label>クライアントID</label> <input type="text" class="form-control" v-model="config.clientId"><br>
+                <label>パスワード</label> <input type="text" class="form-control" v-model="config.password"><br>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-default" v-on:click="change_config">OK</button>
+                <button class="btn btn-default" v-on:click="dialog_close('#config_dialog')">キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal fade" id="start_dialog">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h4 class="modal-title">開始</h4></div>
+              <div class="modal-body">
+                <label>役割</label> <select class="form-control" v-model="param_start.role">
+                  <option value="master">master</option>
+                  <option value="slave">slave</option>
+                </select><br>
+                <label>localStream</label> <select class="form-control" v-model="param_start.localstream_type">
+                  <option value="camera_user" selected>カメラ(user)</option>
+                  <option value="camera_enviroment" selected>カメラ(environment)</option>
+                  <option value="screen" v-if="has_displaymedia">スクリーン</option>
+                </select><br>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-default" v-on:click="start">OK</button>
+                <button class="btn btn-default" v-on:click="dialog_close('#start_dialog')">キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal fade" id="connect_dialog">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h4 class="modal-title">開始</h4></div>
+              <div class="modal-body">
+                <ul>
+                  <li v-for="(item, index) in selectingRemoteClient">
+                    <label>{{item.clientId}}</label> {{item.role}} <button class="btn btn-default" v-on:click="connect_slave(item)">接続</button>
+                  </li>
+                </ul>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-default" v-on:click="dialog_close('#connect_dialog')">閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <router-view></router-view>
+      
+        <!-- for progress-dialog -->
+        <progress-dialog v-bind:title="progress_title"></progress-dialog>
+    </div>
+
+    <script src="js/signaling.js"></script>
+    <script src="js/webrtc_master.js"></script>
+    <script src="js/webrtc_slave.js"></script>
+
+    <script src="js/store.js"></script>
+    <script src="js/router.js"></script>
+    <script src="js/start.js"></script>
+</body>
