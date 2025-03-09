@@ -193,8 +193,9 @@ var vue_options = {
         var config = localStorage.getItem("config");
         if (config) {
             this.config = JSON.parse(config);
+        }else{
+            this.config.signalingUrl = "wss://" + location.host + "/sigannling";
         }
-
         this.slave = new WebrtcSlave(this.config.signalingUrl, this.config.apiKey);
         this.master = new WebrtcMaster(this.config.signalingUrl, this.config.apiKey);
 
