@@ -4,7 +4,8 @@ const HELPER_BASE = process.env.HELPER_BASE || "/opt/";
 const Response = require(HELPER_BASE + 'response');
 const Redirect = require(HELPER_BASE + 'redirect');
 
-const APIKEY = "abcdefg";
+const APIKEY = process.env.SIGNALING_APIKEY || "abcdefg";
+
 const WEBRTC_PING_MESSAGE = "9ca3b441-9558-4ba2-afbf-ebd518ecdc03";
 const WEBRTC_PONG_MESSAGE = "9ca3b442-9558-4ba2-afbf-ebd518ecdc03";
 const WEBRTC_PING_INTERVAL = 25000;
