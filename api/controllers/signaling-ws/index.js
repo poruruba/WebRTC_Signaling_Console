@@ -56,6 +56,7 @@ exports.ws_handler = async (event, context) => {
     var client_item;
     if( body.type == "ready" ){
       if( body.apikey != APIKEY ){
+	console.log("invalid apikey");
         await context.wslib.postToConnection({
           ConnectionId: event.requestContext.connectionId,
           Data: JSON.stringify({
@@ -67,6 +68,7 @@ exports.ws_handler = async (event, context) => {
         return { statusCode: 200 };
       }
       if( channel_item.password != body.password ){
+	console.log("invalid password");
         await context.wslib.postToConnection({
           ConnectionId: event.requestContext.connectionId,
           Data: JSON.stringify({
