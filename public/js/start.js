@@ -138,10 +138,11 @@ var vue_options = {
                     channelId: this.config.channelId,
                     clientId: this.config.clientId,
                     password: this.config.password || "" ,
+                    localStream: this.localStream
                 };
-                this.slave.start(params, (type, result) => {
-                    console.log(type, result);
-                    if (type == "peer") {
+                this.slave.start(params, (module, result) => {
+                    console.log(module, result);
+                    if (module == "peer") {
                         if (result.type == "sdpOffering") {
                             tracks = [];
                         } else
@@ -162,7 +163,7 @@ var vue_options = {
                                 this.toast_show("接続が切断されました。");
                             }
                         }
-                    } else if (type == "signaling") {
+                    } else if (module == "signaling") {
                         if (result.type == "ready") {
                             if (result.remoteClientList.length > 0) {
                                 if( this.config.clientId == this.remoteClient.clientId){
@@ -172,14 +173,14 @@ var vue_options = {
                                     this.dialog_open("#connect_dialog");
                                 }
                             }
-                        }else if( type == "signaling" ){
-                            if( result.type == "closed" ){
-                                this.toast_show("接続が切断されました。");
-                            }else if( result.type == "error"){
-                                this.toast_show(result.message);
-                            }
+                        }else if( result.type == "requestOffer" ){
+                            return { localStream: this.localStream, dataLabel: this.config.dataLabel}
+                        }else if( result.type == "closed" ){
+                            this.toast_show("接続が切断されました。");
+                        }else if( result.type == "error"){
+                            this.toast_show(result.message);
                         }
-                    }else if( type == "data" ){
+                    }else if( module == "data" ){
                         if( result.type == "message"){
                             this.dataMessageLog += `${result.data}\n`;
                         }

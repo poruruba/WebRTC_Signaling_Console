@@ -3,24 +3,58 @@ class WebrtcMaster {
         this.signalingUrl = signalingUrl;
         this.peerList = [];
         this.signalingClient = null;
+        this.callback = null;
     }
     
+    async startOffering(peerConnection, remoteClientId){
+        var offer = await peerConnection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+        });
+        await peerConnection.setLocalDescription(offer);
+
+        this.signalingClient.sendSdpOffer(offer, remoteClientId);
+        if (this.callback) this.callback('peer', { type: 'sdpOffering', remoteClientId: remoteClientId });
+    }
+
+    async resolveAnswer(peerConnection, answer, remoteClientId){
+        await peerConnection.setRemoteDescription(answer);
+        if (this.callback) this.callback('peer', { type: 'sdpAnswered', remoteClientId: remoteClientId });
+    }
+
+    async processOffer(peerConnection, offer, remoteClientId, localStream){
+        await peerConnection.setRemoteDescription(offer);
+        if (this.callback) this.callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
+
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        var answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        this.signalingClient.sendSdpAnswer(answer, remoteClientId);
+        if (this.callback) this.callback('peer', { type: 'sdpAnswering', remoteClientId: remoteClientId });
+    }
+
     // params: localStream, channelId, clientId, password, dataLabel, requestOffer
     async start(params, callback) {
         this.stop();
 
+        this.callback = callback;
+        var requestOffer = params?.requestOffer;
+        var localStream = params?.localStream;
+
         this.signalingClient = new WebrtcSignalingClient("master", this.signalingUrl);
 
         this.signalingClient.on('open', async () => {
-            if (callback) callback('signaling', { type: 'opened' });
+            if (this.callback) this.callback('signaling', { type: 'opened' });
         });
 
         this.signalingClient.on('close', async () => {
-            if (callback) callback('signaling', { type: 'closed' });
+            if (this.callback) this.callback('signaling', { type: 'closed' });
         });
 
         this.signalingClient.on('error', async (message) => {
-            if (callback) callback('signaling', { type: 'error', message: message });
+            if (this.callback) this.callback('signaling', { type: 'error', message: message });
         });
 
         this.signalingClient.on('iceCandidate', async (candidate, remoteClientId) => {
@@ -57,24 +91,19 @@ class WebrtcMaster {
                 this.peerList.push(peer);
             }
             
-            await peerConnection.setRemoteDescription(offer);
-            if (callback) callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
-
-            if (params.dataLabel) {
+            if (params?.dataLabel) {
                 peer.dataChannel = peerConnection.createDataChannel(params.dataLabel);
                 peerConnection.addEventListener("datachannel", event => {
                     event.channel.addEventListener("message", (e) => {
-                        if (callback)
-                            callback("data", { type: 'message', remoteClientId: remoteClientId, data: e.data, label: e.target.label });
+                        if (this.callback)
+                            this.callback("data", { type: 'message', remoteClientId: remoteClientId, data: e.data, label: e.target.label });
                     });
                 });
             }
 
-            params.localStream.getTracks().forEach(track => peerConnection.addTrack(track, params.localStream));
-
             peerConnection.addEventListener('track', event => {
                 peer.tracks.push(event.track);
-                if (callback) callback('peer', { type: 'track', remoteClientId: remoteClientId, kind: event.track.kind, streams: event.streams, track: event.track });
+                if (this.callback) this.callback('peer', { type: 'track', remoteClientId: remoteClientId, kind: event.track.kind, streams: event.streams, track: event.track });
             });
 
             peerConnection.addEventListener('icecandidate', async ({ candidate }) => {
@@ -82,51 +111,36 @@ class WebrtcMaster {
             });
 
             peerConnection.addEventListener('connectionstatechange', (event) => {
-                if (callback) callback('peer', { type: 'connectionstatechange', remoteClientId: remoteClientId, connectionState: event.target.connectionState });
+                if (this.callback) callback('peer', { type: 'connectionstatechange', remoteClientId: remoteClientId, connectionState: event.target.connectionState });
             });
             peerConnection.addEventListener('negotiationneeded', (event) => {
-                if (callback) callback('peer', { type: 'negotiationneeded', remoteClientId: remoteClientId });
+                if (this.callback) this.callback('peer', { type: 'negotiationneeded', remoteClientId: remoteClientId });
             });
             peerConnection.addEventListener('icegatheringstatechange', (event) => {
-                if (callback) callback('peer', { type: 'icegatheringstatechange', remoteClientId: remoteClientId, iceGatheringState: event.target.iceGatheringState });
+                if (this.callback) this.callback('peer', { type: 'icegatheringstatechange', remoteClientId: remoteClientId, iceGatheringState: event.target.iceGatheringState });
             });
             peerConnection.addEventListener('iceconnectionstatechange', (event) => {
-                if (callback) callback('peer', { type: 'iceconnectionstatechange', remoteClientId: remoteClientId, iceConnectionState: event.target.iceConnectionState });
+                if (this.callback) this.callback('peer', { type: 'iceconnectionstatechange', remoteClientId: remoteClientId, iceConnectionState: event.target.iceConnectionState });
             });
             peerConnection.addEventListener('icecandidateerror', (event) => {
-                if (callback) callback('peer', { type: 'icecandidateerror', remoteClientId: remoteClientId });
+                if (this.callback) this.callback('peer', { type: 'icecandidateerror', remoteClientId: remoteClientId });
             });
             peerConnection.addEventListener('signalingstatechange', (event) => {
-                if (callback) callback('peer', { type: 'signalingstatechange', remoteClientId: remoteClientId, signalingState: event.target.signalingState });
+                if (this.callback) this.callback('peer', { type: 'signalingstatechange', remoteClientId: remoteClientId, signalingState: event.target.signalingState });
             });
+            
+            await this.processOffer(peerConnection, offer, remoteClientId, localStream);
 
-            var answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-
-            this.signalingClient.sendSdpAnswer(answer, remoteClientId);
-            if (callback) callback('peer', { type: 'sdpAnswering', remoteClientId: remoteClientId });
-
-            if( params.requestOffer ){
+            if( requestOffer ){
                 this.signalingClient.on('sdpAnswer', async answer => {
-                    if (peerConnection) {
-                        await peerConnection.setRemoteDescription(answer);
-                        if (callback) callback('peer', { type: 'sdpAnswered', remoteClientId: remoteClientId });
-                    }
+                    await this.resolveAnswer(peerConnection, answer, remoteClientId);
                 });
-
-                var offer = await peerConnection.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true,
-                });
-                await peerConnection.setLocalDescription(offer);
-
-                this.signalingClient.sendSdpOffer(offer, remoteClientId);
-                if (callback) callback('peer', { type: 'sdpOffering', remoteClientId: remoteClientId });
+                await this.startOffering(peerConnection, remoteClientId);
             }
         });
 
         this.signalingClient.open(params.channelId, params.clientId, params.password);
-        if (callback) callback('signaling', { type: 'opening' });
+        if (this.callback) this.callback('signaling', { type: 'opening' });
     }
 
     getRemoteClientList(){
@@ -156,13 +170,9 @@ class WebrtcMaster {
             item.peerConnection.close();
         }
         this.peerList = [];
-        this.clientId = null;
-        this.channelId = null;
     }
 
     sendMessage(message, remoteClientId) {
-//        console.log("call: sendMasterMessage");
-
         if (remoteClientId) {
             var peer = this.peerList.find(item => item.clientId == remoteClientId);
             if (!peer)
