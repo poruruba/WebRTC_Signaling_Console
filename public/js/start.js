@@ -5,7 +5,7 @@
 //window.datgui = new dat.GUI();
 
 const defaultDataLabel = "dataLabel";
-const configName_config = "webrtc_config";
+const configName_clientId = "webrtc_clientId";
 const configName_channelId = "webrtc_channelId";
 const configName_password = "webrtc_password";
 var tracks = [];
@@ -16,14 +16,11 @@ var vue_options = {
     store: vue_store,
     router: vue_router,
     data: {
-        config: {
-            channelId: "test",
-            signalingUrl: "wss://hogehoge.com/signaling"
-        },
         param_select: {
             selectingRole: "slave",
             localstream_type: ""
         },
+        dataLabel: defaultDataLabel,
         has_displaymedia: false,
         selectingRemoteClientList: [],
         remoteClientList: [],
@@ -47,18 +44,19 @@ var vue_options = {
 
                 this.currentRole = this.param_select.selectingRole;
                 this.currentChannelId = this.param_select.channelId;
-                this.currentClientId = this.config.clientId;
+                this.currentClientId = this.param_select.clientId;
 
                 if( this.param_select.selectingRole == "master"){
-                    this.master = new WebrtcMaster(this.config.signalingUrl);
+                    this.master = new WebrtcMaster(this.signalingUrl);
                     await this.start_master(this.currentChannelId, this.currentClientId, this.param_select.password);
                 }else if( this.param_select.selectingRole == "slave"){
-                    this.slave = new WebrtcSlave(this.config.signalingUrl);
+                    this.slave = new WebrtcSlave(this.signalingUrl);
                     await this.start_slave(this.currentChannelId, this.currentClientId, this.param_select.password, false);
                 }else if( this.param_select.selectingRole == "direct" ){
-                    this.slave = new WebrtcSlave(this.config.signalingUrl);
+                    this.slave = new WebrtcSlave(this.signalingUrl);
                     await this.start_slave(this.currentChannelId, this.currentClientId, this.param_select.password, true);
                 }
+                localStorage.setItem(configName_clientId, this.param_select.clientId);
                 localStorage.setItem(configName_channelId, this.param_select.channelId);
                 localStorage.setItem(configName_password, this.param_select.password);
             }catch(error){
@@ -70,7 +68,7 @@ var vue_options = {
             this.dialog_close('#client_list_dialog');
 
             this.currentRemoteClient = remoteClient;
-            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: defaultDataLabel});
+            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: this.dataLabel});
         },
         open_client_list: async function(){
             var input = {
@@ -99,11 +97,6 @@ var vue_options = {
             }
         },
 
-        change_config: function () {
-            localStorage.setItem("webrtcConfig", JSON.stringify(this.config));
-            this.dialog_close('#config_dialog');
-            alert("リロードしてください");
-        },
         attach_video: async function(localstream_type){
             if( !localstream_type){
                 this.localStream = null;
@@ -125,7 +118,7 @@ var vue_options = {
         connect_slave: async function (remoteClient) {
             this.dialog_close('#connect_dialog');
             this.remoteClient = remoteClient;
-            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: defaultDataLabel });
+            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: this.dataLabel });
         },
 
         start_master: async function (channelId, clientId, password) {
@@ -133,8 +126,8 @@ var vue_options = {
                 var params = {
                     localStream: this.localStream,
                     channelId: channelId,
-                    clientId: this.config.clientId,
-                    dataLabel: defaultDataLabel,
+                    clientId: this.currentClientId,
+                    dataLabel: this.dataLabel,
                     password: password || "",
                     requestOffer: true
                 };
@@ -214,7 +207,7 @@ var vue_options = {
                                 }
                             }
                         }else if( result.type == "requestOffer" ){
-                            return { localStream: this.localStream, dataLabel: defaultDataLabel}
+                            return { localStream: this.localStream, dataLabel: this.dataLabel}
                         }else if( result.type == "closed" ){
                             this.toast_show("接続が切断されました。");
                         }else if( result.type == "error"){
@@ -261,21 +254,16 @@ var vue_options = {
         if (navigator.mediaDevices.getDisplayMedia)
             this.has_displaymedia = true;
 
-        var config = localStorage.getItem("webrtcConfig");
-        if (config) {
-            this.config = JSON.parse(config);
-        }else{
-            this.config.signalingUrl = ((location.protocol == "https:") ? "wss://" : "ws://") + location.host + "/signaling";
-        }
-
         this.onResize();
         window.addEventListener('resize', this.onResize);
 
+        this.signalingUrl = ((location.protocol == "https:") ? "wss://" : "ws://") + location.host + "/signaling";
         this.param_select = {
+            clientId: localStorage.getItem(configName_clientId) || "test",
             selectingRole: "slave",
             localstream_type: "",
-            channelId: localStorage.getItem(configName_channelId),
-            password: localStorage.getItem(configName_password)
+            channelId: localStorage.getItem(configName_channelId) || "",
+            password: localStorage.getItem(configName_password) || ""
         };
         this.dialog_open("#select_role_dialog");
     }
