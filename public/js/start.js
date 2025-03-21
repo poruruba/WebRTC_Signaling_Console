@@ -199,8 +199,6 @@ var vue_options = {
                         if (result.type == "ready") {
                             if( this.currentRole == "slave"){
                                 if (result.remoteClientList.length == 0) {
-                                }else if (result.remoteClientList.length == 1) {
-                                    this.slave.connect(result.remoteClientList[0].clientId, { localStream: this.localStream });
                                 }else{
                                     this.selectingRemoteClientList = result.remoteClientList;
                                     this.dialog_open("#connect_dialog");
