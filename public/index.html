@@ -46,14 +46,13 @@
 -->
     <div id="top" class="container">
       <div class="jumbotron">
+        <button class="btn btn-default btn-sm pull-right" v-on:click="dialog_open('#config_dialog')">設定</button>
         <h3>WebRTC_Signaling_Console</h3>
       </div>
-        <button class="btn btn-default btn-sm pull-right" v-on:click="dialog_open('#config_dialog')">設定</button>
 
-        <button class="btn btn-primary btn-lg" v-on:click="dialog_open('#start_dialog')">start</button>
-        <label>currentRole</label> {{currentRole}} <label>channelId</label> {{config.channelId}} <label>clientId</label> {{config.clientId}}<br>
-        <br>
-
+      <span v-show="currentRole">
+        <button class="btn btn-default btn-sm pull-right" v-on:click="open_client_list">チャネルリスト</button>
+        <label>ロール</label>:{{currentRole}} <label>チャンネルID</label>:{{currentChannelId}} <label>クライアントID</label>:{{currentClientId}}<br>
         <div v-if="currentRole=='master'" class="form-inline">
           <label>remoteClientList</label>
           <select class="form-control" v-model="selectedRemoteClient">
@@ -61,13 +60,14 @@
             <option v-for="(item, index) in remoteClientList" v-bind:value="item">{{item.clientId}}</option>
           </select> <button class="btn btn-default" v-on:click="select_remoteClient">選択</button>
         </div>
-        <br>
+      </span>
+      <br>
 
         <div class="row">
           <div class="col-sm-9">
             <div class="panel panel-primary">
               <div class="panel-heading">
-                相手：{{remoteClient.clientId}}
+                相手：{{currentRemoteClient.clientId}}
               </div>
               <div class="panel-body" id="div_remotecamera_view">
                 <video id="remotecamera_view" class="img-responsive" autoplay controls />
@@ -104,10 +104,7 @@
               <div class="modal-header"><h4 class="modal-title">設定</h4></div>
               <div class="modal-body">
                 <label>接続先URL</label> <input type="text" class="form-control" v-model="config.signalingUrl"><br>
-                <label>チャンネルID</label> <input type="text" class="form-control" v-model="config.channelId"><br>
                 <label>クライアントID</label> <input type="text" class="form-control" v-model="config.clientId"><br>
-                <label>パスワード</label> <input type="text" class="form-control" v-model="config.password"><br>
-                <label>dataLabel</label> <input type="text" class="form-control" v-model="config.dataLabel"><br>
               </div>
               <div class="modal-footer">
                 <button class="btn btn-default" v-on:click="change_config">OK</button>
@@ -117,24 +114,53 @@
           </div>
         </div>
 
-        <div class="modal fade" id="start_dialog">
+        <div class="modal fade" id="select_role_dialog">
           <div class="modal-dialog">
             <div class="modal-content">
-              <div class="modal-header"><h4 class="modal-title">開始</h4></div>
+              <div class="modal-header"><h4 class="modal-title">ロール・チャンネルの選択</h4></div>
               <div class="modal-body">
-                <label>役割</label> <select class="form-control" v-model="param_start.role">
+                <label>ロール</label> <select class="form-control" v-model="param_select.selectingRole">
                   <option value="master">master</option>
                   <option value="slave">slave</option>
+                  <option value="direct">direct</option>
                 </select><br>
-                <label>localStream</label> <select class="form-control" v-model="param_start.localstream_type">
+                <label>localStream</label> <select class="form-control" v-model="param_select.localstream_type">
                   <option value="camera_user" selected>カメラ(user)</option>
                   <option value="camera_enviroment" selected>カメラ(environment)</option>
                   <option value="screen" v-if="has_displaymedia">スクリーン</option>
+                  <option value="">なし</option>
                 </select><br>
+                <label>チャネルID</label> <input type="text" class="form-control" v-model="param_select.channelId"><br>
+                <label>パスワード</label> <input type="text" class="form-control" v-model="param_select.password"><br>
               </div>
               <div class="modal-footer">
-                <button class="btn btn-default" v-on:click="start">OK</button>
-                <button class="btn btn-default" v-on:click="dialog_close('#start_dialog')">キャンセル</button>
+                <button class="btn btn-default" v-on:click="select_role">選択</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal fade" id="client_list_dialog">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <div class="modal-header"><h4 class="modal-title">クライアントリスト</h4></div>
+              <div class="modal-body">
+                <table class="table table-striped">
+                  <thead>
+                    <tr>
+                      <th>clientId</th><th>role</th><th>state</th><th>action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(item, index) in clientList">
+                      <td>{{item.clientId}}</td><td>{{item.role}}</td><td>{{item.state}}</td>
+                      <td><button class="btn btn-default btn-sm" v-on:click="connect_direct(item)" v-bind:disabled="item.clientId==currentClientId">接続</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-default" v-on:click="dialog_close('#client_list_dialog')">閉じる</button>
               </div>
             </div>
           </div>
@@ -146,7 +172,7 @@
               <div class="modal-header"><h4 class="modal-title">開始</h4></div>
               <div class="modal-body">
                 <ul>
-                  <li v-for="(item, index) in selectingRemoteClient">
+                  <li v-for="(item, index) in selectingRemoteClientList">
                     <label>{{item.clientId}}</label> {{item.role}} <button class="btn btn-default" v-on:click="connect_slave(item)">接続</button>
                   </li>
                 </ul>
@@ -156,8 +182,7 @@
               </div>
             </div>
           </div>
-        </div>
-
+        </div>        
 
         <router-view></router-view>
       
