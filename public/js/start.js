@@ -4,6 +4,10 @@
 //const remoteConsole = new RemoteConsole("http://[remote server]/logio-post");
 //window.datgui = new dat.GUI();
 
+const defaultDataLabel = "dataLabel";
+const configName_config = "webrtc_config";
+const configName_channelId = "webrtc_channelId";
+const configName_password = "webrtc_password";
 var tracks = [];
 
 var vue_options = {
@@ -12,28 +16,76 @@ var vue_options = {
     store: vue_store,
     router: vue_router,
     data: {
-        clientId: "Test",
         config: {
             channelId: "test",
-            clientId: "test",
             signalingUrl: "wss://hogehoge.com/signaling"
         },
-        param_start: {
-            role: "master",
-            localstream_type: "camera_user"
+        param_select: {
+            selectingRole: "slave",
+            localstream_type: ""
         },
         has_displaymedia: false,
-        remoteClient: {},
-        selectingRemoteClient: [],
+        selectingRemoteClientList: [],
         remoteClientList: [],
         selectedRemoteClient: null,
         currentRole: null,
+        currentChannelId: null,
+        currentRemoteClient: {},
+        currentClientId: null,
         dataMessage: "",
-        dataMessageLog: ""
+        dataMessageLog: "",
+        clientList: []
     },
     computed: {
     },
     methods: {
+        select_role: async function(){
+            try{
+                await this.attach_video(this.param_select.localstream_type);
+
+                this.dialog_close("#select_role_dialog");
+
+                this.currentRole = this.param_select.selectingRole;
+                this.currentChannelId = this.param_select.channelId;
+                this.currentClientId = this.config.clientId;
+
+                if( this.param_select.selectingRole == "master"){
+                    this.master = new WebrtcMaster(this.config.signalingUrl);
+                    await this.start_master(this.currentChannelId, this.currentClientId, this.param_select.password);
+                }else if( this.param_select.selectingRole == "slave"){
+                    this.slave = new WebrtcSlave(this.config.signalingUrl);
+                    await this.start_slave(this.currentChannelId, this.currentClientId, this.param_select.password, false);
+                }else if( this.param_select.selectingRole == "direct" ){
+                    this.slave = new WebrtcSlave(this.config.signalingUrl);
+                    await this.start_slave(this.currentChannelId, this.currentClientId, this.param_select.password, true);
+                }
+                localStorage.setItem(configName_channelId, this.param_select.channelId);
+                localStorage.setItem(configName_password, this.param_select.password);
+            }catch(error){
+                console.error(error);
+                alert(error);
+            }
+        },
+        connect_direct: async function(remoteClient){
+            this.dialog_close('#client_list_dialog');
+
+            this.currentRemoteClient = remoteClient;
+            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: defaultDataLabel});
+        },
+        open_client_list: async function(){
+            var input = {
+                method: "GET",
+                url: "/signaling-get-client",
+                qs: {
+                    channelId: this.currentChannelId
+                }
+            };
+            var result = await do_http(input);
+            console.log(result);
+            this.clientList = result.client_list;
+            this.dialog_open("#client_list_dialog");
+        },
+
         select_remoteClient: async function(){
             if( this.selectedRemoteClient ){
                 var mediaStream = this.master.getMediaStream(this.selectedRemoteClient.clientId);
@@ -46,43 +98,47 @@ var vue_options = {
                 video.srcObject = null;
             }
         },
+
         change_config: function () {
-            localStorage.setItem("config", JSON.stringify(this.config));
+            localStorage.setItem("webrtcConfig", JSON.stringify(this.config));
             this.dialog_close('#config_dialog');
             alert("リロードしてください");
         },
-        start: async function () {
-            if (this.param_start.role == 'master')
-                this.start_master();
-            else if (this.param_start.role == 'slave')
-                this.start_slave();
-            this.currentRole = this.param_start.role;
-            this.dialog_close('#start_dialog');
+        attach_video: async function(localstream_type){
+            if( !localstream_type){
+                this.localStream = null;
+            }else
+            if (localstream_type == 'screen') {
+                this.localStream = await navigator.mediaDevices.getDisplayMedia({ video: {}, audio: true });
+            } else{
+                var facingMode = (localstream_type == 'camera_enviroment') ? 'environment' : 'user';
+                const constraints = {
+                    video: { facingMode: facingMode },
+                    audio: { echoCancellation: true, noiseSuppression: true },
+                };
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            }
+            const video = document.querySelector('#localcamera_view');
+            video.srcObject = this.localStream;
         },
-        start_master: async function () {
-            try{
-                if (this.param_start.localstream_type == 'screen') {
-                    this.localStream = await navigator.mediaDevices.getDisplayMedia({ video: {}, audio: true });
-                } else {
-                    var facingMode = (this.param_start.localstream_type == 'camera_enviroment') ? 'environment' : 'user';
-                    const constraints = {
-                        video: { facingMode: facingMode },
-                        audio: { echoCancellation: true, noiseSuppression: true },
-                    };
-                    this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                }
-                const video = document.querySelector('#localcamera_view');
-                video.srcObject = this.localStream;
 
+        connect_slave: async function (remoteClient) {
+            this.dialog_close('#connect_dialog');
+            this.remoteClient = remoteClient;
+            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: defaultDataLabel });
+        },
+
+        start_master: async function (channelId, clientId, password) {
+            try{
                 var params = {
                     localStream: this.localStream,
-                    channelId: this.config.channelId,
+                    channelId: channelId,
                     clientId: this.config.clientId,
-                    dataLabel: this.config.dataLabel,
-                    password: this.config.password || "",
+                    dataLabel: defaultDataLabel,
+                    password: password || "",
                     requestOffer: true
                 };
-                this.master.start(params, (type, result) => {
+                await this.master.start(params, (type, result) => {
                     console.log(type, result);
                     if (type == "peer") {
                         if (result.type == "sdpOffering") {
@@ -114,33 +170,16 @@ var vue_options = {
                 this.toast_show(error);
             }
         },
-        connect_slave: async function (remoteClient) {
-            this.dialog_close('#connect_dialog');
-            this.remoteClient = remoteClient;
-            this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: this.config.dataLabel});
-        },
-        start_slave: async function () {
+        start_slave: async function (channelId, clientId, password, autoSlaveConnect) {
             try {
-                if (this.param_start.localstream_type == 'screen') {
-                    this.localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                } else {
-                    var facingMode = (this.param_start.localstream_type == 'camera_enviroment') ? 'environment' : 'user';
-                    const constraints = {
-                        video: { facingMode: facingMode },
-                        audio: { echoCancellation: true, noiseSuppression: true },
-                    };
-                    this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                }
-                const video = document.querySelector('#localcamera_view');
-                video.srcObject = this.localStream;
-
                 var params = {
-                    channelId: this.config.channelId,
-                    clientId: this.config.clientId,
-                    password: this.config.password || "" ,
-                    localStream: this.localStream
+                    channelId: channelId,
+                    clientId: clientId,
+                    password: password || "",
+                    localStream: this.localStream,
+                    autoSlaveConnect: autoSlaveConnect,
                 };
-                this.slave.start(params, (module, result) => {
+                await this.slave.start(params, (module, result) => {
                     console.log(module, result);
                     if (module == "peer") {
                         if (result.type == "sdpOffering") {
@@ -165,16 +204,17 @@ var vue_options = {
                         }
                     } else if (module == "signaling") {
                         if (result.type == "ready") {
-                            if (result.remoteClientList.length > 0) {
-                                if( this.config.clientId == this.remoteClient.clientId){
-                                    this.slave.connect(this.remoteClient.clientId, { localStream: this.localStream });
+                            if( this.currentRole == "slave"){
+                                if (result.remoteClientList.length == 0) {
+                                }else if (result.remoteClientList.length == 1) {
+                                    this.slave.connect(result.remoteClientList[0].clientId, { localStream: this.localStream });
                                 }else{
-                                    this.selectingRemoteClient = result.remoteClientList;
+                                    this.selectingRemoteClientList = result.remoteClientList;
                                     this.dialog_open("#connect_dialog");
                                 }
                             }
                         }else if( result.type == "requestOffer" ){
-                            return { localStream: this.localStream, dataLabel: this.config.dataLabel}
+                            return { localStream: this.localStream, dataLabel: defaultDataLabel}
                         }else if( result.type == "closed" ){
                             this.toast_show("接続が切断されました。");
                         }else if( result.type == "error"){
@@ -221,17 +261,23 @@ var vue_options = {
         if (navigator.mediaDevices.getDisplayMedia)
             this.has_displaymedia = true;
 
-        var config = localStorage.getItem("config");
+        var config = localStorage.getItem("webrtcConfig");
         if (config) {
             this.config = JSON.parse(config);
         }else{
             this.config.signalingUrl = ((location.protocol == "https:") ? "wss://" : "ws://") + location.host + "/signaling";
         }
-        this.slave = new WebrtcSlave(this.config.signalingUrl);
-        this.master = new WebrtcMaster(this.config.signalingUrl);
 
         this.onResize();
         window.addEventListener('resize', this.onResize);
+
+        this.param_select = {
+            selectingRole: "slave",
+            localstream_type: "",
+            channelId: localStorage.getItem(configName_channelId),
+            password: localStorage.getItem(configName_password)
+        };
+        this.dialog_open("#select_role_dialog");
     }
 };
 vue_add_data(vue_options, { progress_title: '' }); // for progress-dialog

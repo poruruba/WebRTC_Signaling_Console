@@ -8,72 +8,89 @@ class WebrtcSignalingClient{
     this.callbacks = [];
   }
 
-  open(channelId, clientId, password){
+  async open(channelId, clientId, password){
     this.channelId = channelId;
     this.clientId = clientId;
 
     this.ws_socket = new WebSocket(this.url);
 
-    // Websocket接続時処理
-    this.ws_socket.onopen = (event) => {
-//      console.log("websocket opened", event);
+    await new Promise((resolve, reject) =>{
+      let connected = false;
 
-      // readyの送信
-      this.ws_socket.send(JSON.stringify({
-        type: "ready",
-        role: this.role,
-        clientId: this.clientId,
-        channelId: this.channelId,
-        password: password
-      }));
+      // Websocket接続時処理
+      this.ws_socket.onopen = (event) => {
+  //      console.log("websocket opened", event);
 
-      var callback = this.callbacks.find(item => item.type == "open" );
-      if( callback )
-        callback.callback();
-    };
+        connected = true;
 
-    this.ws_socket.onclose = (event) =>{
-//      console.log("websocket closed", event);
-      var callback = this.callbacks.find(item => item.type == "close" );
-      if( callback )
-        callback.callback();
-    };
+        resolve();
+      };
 
-    this.ws_socket.onerror = (event) =>{
-//      console.error("websocket error", event);
-      var callback = this.callbacks.find(item => item.type == "error" );
-      if( callback )
-        callback.callback(event);
-    };
+      this.ws_socket.onerror = (event) =>{
+  //      console.error("websocket error", event);
 
-    this.ws_socket.onmessage = (event) => {
-      // Websocket接続維持処理
-      if( event.data == WEBRTC_PING_MESSAGE ){
-        this.ws_socket.send(WEBRTC_PONG_MESSAGE);
-        return;
-      }else if( event.data == WEBRTC_PONG_MESSAGE ){
-        return;
-      }
+        if( !connected )
+          return reject(event);
 
-      var body = JSON.parse(event.data);
-//      console.log("websocket message", body);
-
-      if( body.type == "ready"){
-        var callback = this.callbacks.find(item => item.type == "ready" );
-        if( callback )
-          callback.callback(body.clients, body.clientId);
-      }else
-      if( body.type == "sdpAnswer" || body.type == "sdpOffer" || body.type == "iceCandidate" ){
-        var callback = this.callbacks.find(item => item.type == body.type );
-        if( callback )
-          callback.callback(body.data, body.clientId);
-      }else
-      if( body.type == 'error' ){
         var callback = this.callbacks.find(item => item.type == "error" );
         if( callback )
-          callback.callback(body.message);
-      }
-    };
+          callback.callback(event);
+      };
+
+      this.ws_socket.onclose = (event) =>{
+        //      console.log("websocket closed", event);
+      
+        if( !connected )
+          return reject(event);
+
+        var callback = this.callbacks.find(item => item.type == "close" );
+        if( callback )
+          callback.callback();
+      };
+
+      
+      this.ws_socket.onmessage = (event) => {
+        // Websocket接続維持処理
+        if( event.data == WEBRTC_PING_MESSAGE ){
+          this.ws_socket.send(WEBRTC_PONG_MESSAGE);
+          return;
+        }else if( event.data == WEBRTC_PONG_MESSAGE ){
+          return;
+        }
+
+        var body = JSON.parse(event.data);
+  //      console.log("websocket message", body);
+
+        if( body.type == "ready"){
+          var callback = this.callbacks.find(item => item.type == "ready" );
+          if( callback )
+            callback.callback(body.clients, body.clientId);
+        }else
+        if( body.type == "sdpOffer0" || body.type == "sdpOffer" || body.type == "sdpAnswer" || body.type == "iceCandidate" ){
+          var callback = this.callbacks.find(item => item.type == body.type );
+          if( callback )
+            callback.callback(body.data, body.clientId);
+        }else
+        if( body.type == 'error' ){
+          var callback = this.callbacks.find(item => item.type == "error" );
+          if( callback )
+            callback.callback(body.message);
+        }
+      };
+    });
+
+    // readyの送信
+    this.ws_socket.send(JSON.stringify({
+      type: "ready",
+      role: this.role,
+      clientId: this.clientId,
+      channelId: this.channelId,
+      password: password
+    }));
+
+    var callback = this.callbacks.find(item => item.type == "open" );
+    if( callback )
+      callback.callback();
   }
 
   close(){
@@ -91,6 +108,16 @@ class WebrtcSignalingClient{
     }else{
       item.callback = callback;
     }
+  }
+
+  sendSdpOffer0(offer, remoteClientId){
+    this.ws_socket.send(JSON.stringify({
+      type: "sdpOffer0",
+      clientId: this.clientId,
+      channelId: this.channelId,
+      target: remoteClientId,
+      data: offer
+    }));
   }
 
   sendSdpOffer(offer, remoteClientId){

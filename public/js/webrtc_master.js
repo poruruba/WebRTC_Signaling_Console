@@ -4,44 +4,6 @@ class WebrtcMaster {
         this.peerList = [];
         this.signalingClient = null;
         this.callback = null;
-    }
-    
-    async startOffering(peerConnection, remoteClientId){
-        var offer = await peerConnection.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-        });
-        await peerConnection.setLocalDescription(offer);
-
-        this.signalingClient.sendSdpOffer(offer, remoteClientId);
-        if (this.callback) this.callback('peer', { type: 'sdpOffering', remoteClientId: remoteClientId });
-    }
-
-    async resolveAnswer(peerConnection, answer, remoteClientId){
-        await peerConnection.setRemoteDescription(answer);
-        if (this.callback) this.callback('peer', { type: 'sdpAnswered', remoteClientId: remoteClientId });
-    }
-
-    async processOffer(peerConnection, offer, remoteClientId, localStream){
-        await peerConnection.setRemoteDescription(offer);
-        if (this.callback) this.callback('peer', { type: 'sdpOffered', remoteClientId: remoteClientId });
-
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-        var answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-
-        this.signalingClient.sendSdpAnswer(answer, remoteClientId);
-        if (this.callback) this.callback('peer', { type: 'sdpAnswering', remoteClientId: remoteClientId });
-    }
-
-    // params: localStream, channelId, clientId, password, dataLabel, requestOffer
-    async start(params, callback) {
-        this.stop();
-
-        this.callback = callback;
-        var requestOffer = params?.requestOffer;
-        var localStream = params?.localStream;
 
         this.signalingClient = new WebrtcSignalingClient("master", this.signalingUrl);
 
@@ -63,9 +25,47 @@ class WebrtcMaster {
                 if( peer )
                     await peer.peerConnection.addIceCandidate(candidate);
             }
+        });        
+    }
+    
+    async startOffering(peer){
+        var offer = await peer.peerConnection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
         });
+        await peer.peerConnection.setLocalDescription(offer);
 
-        this.signalingClient.on('sdpOffer', async (offer, remoteClientId) => {
+        this.signalingClient.sendSdpOffer(offer, peer.clientId);
+        if (this.callback) this.callback('peer', { type: 'sdpOffering', remoteClientId: peer.clientId });
+    }
+
+    async resolveAnswer(peer, answer){
+        await peer.peerConnection.setRemoteDescription(answer);
+        if (this.callback) this.callback('peer', { type: 'sdpAnswered', remoteClientId: peer.clientId });
+    }
+
+    async processOffer(peer, offer, localStream){
+        await peer.peerConnection.setRemoteDescription(offer);
+        if (this.callback) this.callback('peer', { type: 'sdpOffered', remoteClientId: peer.clientId });
+
+        if( localStream )
+            localStream.getTracks().forEach(track => peer.peerConnection.addTrack(track, localStream));
+
+        var answer = await peer.peerConnection.createAnswer();
+        await peer.peerConnection.setLocalDescription(answer);
+
+        this.signalingClient.sendSdpAnswer(answer, peer.clientId);
+        if (this.callback) this.callback('peer', { type: 'sdpAnswering', remoteClientId: peer.clientId });
+    }
+
+    // params: localStream, channelId, clientId, password, dataLabel, requestOffer
+    async start(params, callback) {
+        this.callback = callback;
+        let requestOffer = params.requestOffer;
+        let dataLabel = params.dataLabel;
+        let localStream = params.localStream;
+
+        this.signalingClient.on('sdpOffer0', async (offer, remoteClientId) => {
             var peer = this.peerList.find(item => item.clientId == remoteClientId );
             if( peer )
                 peer.peerConnection.close();
@@ -91,12 +91,11 @@ class WebrtcMaster {
                 this.peerList.push(peer);
             }
             
-            if (params?.dataLabel) {
-                peer.dataChannel = peerConnection.createDataChannel(params.dataLabel);
+            if (dataLabel) {
+                peer.dataChannel = peerConnection.createDataChannel(dataLabel);
                 peerConnection.addEventListener("datachannel", event => {
                     event.channel.addEventListener("message", (e) => {
-                        if (this.callback)
-                            this.callback("data", { type: 'message', remoteClientId: remoteClientId, data: e.data, label: e.target.label });
+                        if (this.callback) this.callback("data", { type: 'message', remoteClientId: remoteClientId, data: e.data, label: e.target.label });
                     });
                 });
             }
@@ -129,17 +128,19 @@ class WebrtcMaster {
                 if (this.callback) this.callback('peer', { type: 'signalingstatechange', remoteClientId: remoteClientId, signalingState: event.target.signalingState });
             });
             
-            await this.processOffer(peerConnection, offer, remoteClientId, localStream);
+            await this.processOffer(peer, offer, localStream);
 
             if( requestOffer ){
-                this.signalingClient.on('sdpAnswer', async answer => {
-                    await this.resolveAnswer(peerConnection, answer, remoteClientId);
+                this.signalingClient.on('sdpAnswer', async (answer, remoteClientId2) => {
+                    if( remoteClientId != remoteClientId2 )
+                        return;
+                    await this.resolveAnswer(peer, answer);
                 });
-                await this.startOffering(peerConnection, remoteClientId);
+                await this.startOffering(peer);
             }
         });
 
-        this.signalingClient.open(params.channelId, params.clientId, params.password);
+        await this.signalingClient.open(params.channelId, params.clientId, params.password);
         if (this.callback) this.callback('signaling', { type: 'opening' });
     }
 
