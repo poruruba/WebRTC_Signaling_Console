@@ -4,8 +4,6 @@ const HELPER_BASE = process.env.HELPER_BASE || "/opt/";
 const Response = require(HELPER_BASE + 'response');
 //const Redirect = require(HELPER_BASE + 'redirect');
 
-const APIKEY = process.env.SIGNALING_APIKEY || "abcdefg";
-
 const WEBRTC_PING_MESSAGE = "9ca3b441-9558-4ba2-afbf-ebd518ecdc03";
 const WEBRTC_PONG_MESSAGE = "9ca3b442-9558-4ba2-afbf-ebd518ecdc03";
 const WEBRTC_PING_INTERVAL = 25000;
@@ -15,14 +13,20 @@ let ping_interval_id = 0;
 
 exports.handler = async (event, context, callback) => {
 	// console.log(event);
-  if (event.path == "/signaling-get"){
-    // APIキーのチェック
-    if( event.queryStringParameters.apikey != APIKEY ){
-      console.log("invalid apikey");
-      throw new Error("invalid apikey");
-    }
+  if (event.path == "/signaling-get-all"){
     // チャネルリストの返却
-  	return new Response(channel_list);
+    var list = channel_list.map(item =>{
+      return {
+        channelId: item.channelId,
+        clients: item.clients
+      };
+    });
+    return new Response({ channel_list: list } );
+  }else if( event.path == "/signaling-get-client"){
+    // クライアントリストの返却
+    var item = channel_list.find(item => item.channelId == event.queryStringParameters["channelId"] )
+    var list = item ? item.clients : [];
+    return new Response({ client_list: list });
   }else
   {
     console.log("unknown endpoint");
@@ -85,6 +89,7 @@ exports.ws_handler = async (event, context) => {
         role: body.role,
         connectionId: event.requestContext.connectionId,
         clientId: body.clientId,
+        state: "ready"
       };
       channel_item.clients.push(client_item);
     }else{
@@ -117,7 +122,8 @@ exports.ws_handler = async (event, context) => {
               clientId: client_item.clientId,
               clients: [{
                 role: client_item.role,
-                clientId: client_item.clientId
+                clientId: client_item.clientId,
+                state: client_item.state
               }]
             })
           }, null);
@@ -127,11 +133,12 @@ exports.ws_handler = async (event, context) => {
         // slaveの場合： 現在コネクションの返却
         var clients = [];
         for( let item of channel_item.clients ){
-          if( item.clientId == client_item.clientId )
+          if( item.clientId == client_item.clientId || item.role == 'slave' )
             continue;
           clients.push({
             role: item.role,
-            clientId: item.clientId
+            clientId: item.clientId,
+            state: item.state
           });
         }
         await context.wslib.postToConnection({
@@ -144,7 +151,7 @@ exports.ws_handler = async (event, context) => {
         }, null);
       }   
     }else
-    if( body.type == "sdpAnswer" || body.type == "sdpOffer" || body.type == "iceCandidate" ){
+    if( body.type == "sdpOffer0" || body.type == "sdpOffer" || body.type == "sdpAnswer" || body.type == "iceCandidate" ){
       // 通信内容をターゲットクライアントに転送
       var item = channel_item.clients.find(item => item.clientId == body.target );
       if( item ){
@@ -156,6 +163,8 @@ exports.ws_handler = async (event, context) => {
             data: body.data
           })
         }, null);
+        if( body.type == "sdpOffer0" || body.type == "sdpOffer") client_item.state = "offering";
+        else if( body.type == "sdpAnswer" ) item.state = "answered";
       }
     } 
 

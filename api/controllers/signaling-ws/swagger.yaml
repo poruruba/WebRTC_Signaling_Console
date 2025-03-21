@@ -1,5 +1,13 @@
 paths:
-  /signaling-get:
+  /signaling-get-all:
+    get:
+      responses:
+        200:
+          description: Success
+          schema:
+            type: object
+
+  /signaling-get-client:
     get:
       responses:
         200:
