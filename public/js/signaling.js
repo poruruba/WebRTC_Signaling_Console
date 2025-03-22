@@ -22,7 +22,6 @@ class WebrtcSignalingClient{
   //      console.log("websocket opened", event);
 
         connected = true;
-
         resolve();
       };
 
@@ -66,7 +65,7 @@ class WebrtcSignalingClient{
           if( callback )
             callback.callback(body.clients, body.clientId);
         }else
-        if( body.type == "sdpOffer0" || body.type == "sdpOffer" || body.type == "sdpAnswer" || body.type == "iceCandidate" ){
+        if( body.type == "sdpOffer1" || body.type == "sdpOffer2" || body.type == "sdpAnswer" || body.type == "iceCandidate" ){
           var callback = this.callbacks.find(item => item.type == body.type );
           if( callback )
             callback.callback(body.data, body.clientId);
@@ -110,9 +109,9 @@ class WebrtcSignalingClient{
     }
   }
 
-  sendSdpOffer0(offer, remoteClientId){
+  sendSdpOffer1(offer, remoteClientId){
     this.ws_socket.send(JSON.stringify({
-      type: "sdpOffer0",
+      type: "sdpOffer1",
       clientId: this.clientId,
       channelId: this.channelId,
       target: remoteClientId,
@@ -120,9 +119,9 @@ class WebrtcSignalingClient{
     }));
   }
 
-  sendSdpOffer(offer, remoteClientId){
+  sendSdpOffer2(offer, remoteClientId){
     this.ws_socket.send(JSON.stringify({
-      type: "sdpOffer",
+      type: "sdpOffer2",
       clientId: this.clientId,
       channelId: this.channelId,
       target: remoteClientId,

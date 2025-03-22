@@ -20,6 +20,7 @@ class WebrtcMaster {
         });
 
         this.signalingClient.on('iceCandidate', async (candidate, remoteClientId) => {
+            console.log("signalingClient.on 'iceCandidate'");
             if (candidate){
                 var peer = this.peerList.find(item => item.clientId == remoteClientId);
                 if( peer )
@@ -28,14 +29,14 @@ class WebrtcMaster {
         });        
     }
     
-    async startOffering(peer){
+    async startOffering2(peer){
         var offer = await peer.peerConnection.createOffer({
             offerToReceiveAudio: true,
             offerToReceiveVideo: true,
         });
         await peer.peerConnection.setLocalDescription(offer);
 
-        this.signalingClient.sendSdpOffer(offer, peer.clientId);
+        this.signalingClient.sendSdpOffer2(offer, peer.clientId);
         if (this.callback) this.callback('peer', { type: 'sdpOffering', remoteClientId: peer.clientId });
     }
 
@@ -65,7 +66,7 @@ class WebrtcMaster {
         let dataLabel = params.dataLabel;
         let localStream = params.localStream;
 
-        this.signalingClient.on('sdpOffer0', async (offer, remoteClientId) => {
+        this.signalingClient.on('sdpOffer1', async (offer, remoteClientId) => {
             var peer = this.peerList.find(item => item.clientId == remoteClientId );
             if( peer )
                 peer.peerConnection.close();
@@ -107,6 +108,7 @@ class WebrtcMaster {
 
             peerConnection.addEventListener('icecandidate', async ({ candidate }) => {
                 this.signalingClient.sendIceCandidate(candidate, remoteClientId);
+                console.log("sendIceCandidate 'iceCandidate'");
             });
 
             peerConnection.addEventListener('connectionstatechange', (event) => {
@@ -136,7 +138,7 @@ class WebrtcMaster {
                         return;
                     await this.resolveAnswer(peer, answer);
                 });
-                await this.startOffering(peer);
+                await this.startOffering2(peer);
             }
         });
 

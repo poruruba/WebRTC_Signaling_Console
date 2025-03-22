@@ -36,7 +36,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
 
-  <title>WebRTC_Signaling_Console</title>
+  <title>WebRTC/Signaling Console</title>
 </head>
 <body>
 <!--
@@ -46,12 +46,12 @@
 -->
     <div id="top" class="container">
       <div class="jumbotron">
-        <h3>WebRTC_Signaling_Console</h3>
+        <h3>WebRTC/Signaling Console</h3>
       </div>
 
       <span v-show="currentRole">
-        <button class="btn btn-default btn-sm pull-right" v-on:click="open_client_list">チャネルリスト</button>
-        <label>ロール</label>:{{currentRole}} <label>チャンネルID</label>:{{currentChannelId}} <label>クライアントID</label>:{{currentClientId}}<br>
+        <button v-if="currentRole=='direct'" class="btn btn-default btn-sm pull-right" v-on:click="open_client_list">チャネルリスト</button>
+        <label>ロール</label>：{{currentRole}} <label>チャンネルID</label>：{{currentChannelId}} <label>クライアントID</label>：{{currentClientId}}<br>
         <div v-if="currentRole=='master'" class="form-inline">
           <label>remoteClientList</label>
           <select class="form-control" v-model="selectedRemoteClient">
@@ -100,25 +100,27 @@
         <div class="modal fade" id="select_role_dialog">
           <div class="modal-dialog">
             <div class="modal-content">
-              <div class="modal-header"><h4 class="modal-title">ロール・チャンネルの選択</h4></div>
+              <div class="modal-header"><h4 class="modal-title">ロール・チャネルの選択</h4></div>
               <div class="modal-body">
-                <label>ロール</label> <select class="form-control" v-model="param_select.selectingRole">
-                  <option value="master">master</option>
-                  <option value="slave">slave</option>
-                  <option value="direct">direct</option>
-                </select><br>
-                <label>localStream</label> <select class="form-control" v-model="param_select.localstream_type">
-                  <option value="camera_user" selected>カメラ(user)</option>
-                  <option value="camera_enviroment" selected>カメラ(environment)</option>
-                  <option value="screen" v-if="has_displaymedia">スクリーン</option>
-                  <option value="">なし</option>
-                </select><br>
+                <div class="form-inline">
+                  <label>ロール</label> <select class="form-control" v-model="param_select.selectingRole">
+                    <option value="master">master</option>
+                    <option value="slave">slave</option>
+                    <option value="direct">direct</option>
+                  </select><br><br>
+                  <label>localStream</label> <select class="form-control" v-model="param_select.localStreamType">
+                    <option value="camera_user" selected>カメラ(user)</option>
+                    <option value="camera_enviroment" selected>カメラ(environment)</option>
+                    <option value="screen" v-if="has_displaymedia">スクリーン</option>
+                    <option value="">なし</option>
+                  </select>
+                </div><br>
                 <label>クライアントID</label> <input type="text" class="form-control" v-model="param_select.clientId"><br>
                 <label>チャネルID</label> <input type="text" class="form-control" v-model="param_select.channelId"><br>
                 <label>パスワード</label> <input type="text" class="form-control" v-model="param_select.password"><br>
               </div>
               <div class="modal-footer">
-                <button class="btn btn-default" v-on:click="select_role">選択</button>
+                <button class="btn btn-primary" v-on:click="select_role">接続</button>
               </div>
             </div>
           </div>
@@ -138,7 +140,7 @@
                   <tbody>
                     <tr v-for="(item, index) in clientList">
                       <td>{{item.clientId}}</td><td>{{item.role}}</td><td>{{item.state}}</td>
-                      <td><button class="btn btn-default btn-sm" v-on:click="connect_direct(item)" v-bind:disabled="item.clientId==currentClientId">接続</button></td>
+                      <td><button class="btn btn-primary btn-sm" v-on:click="connect_direct(item)" v-bind:disabled="item.clientId==currentClientId">接続</button></td>
                     </tr>
                   </tbody>
                 </table>
@@ -153,11 +155,11 @@
         <div class="modal fade" id="connect_dialog">
           <div class="modal-dialog">
             <div class="modal-content">
-              <div class="modal-header"><h4 class="modal-title">開始</h4></div>
+              <div class="modal-header"><h4 class="modal-title">接続先リスト</h4></div>
               <div class="modal-body">
                 <ul>
                   <li v-for="(item, index) in selectingRemoteClientList">
-                    <label>{{item.clientId}}</label> {{item.role}} <button class="btn btn-default" v-on:click="connect_slave(item)">接続</button>
+                    <button class="btn btn-primary btn-sm" v-on:click="connect_slave(item)">接続</button> <label>{{item.clientId}}</label> {{item.role}} 
                   </li>
                 </ul>
               </div>

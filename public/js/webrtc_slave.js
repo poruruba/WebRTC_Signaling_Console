@@ -1,12 +1,12 @@
 class WebrtcSlave {
-    constructor(signalingUrl) {
+    constructor(signalingUrl, role = 'slave') {
         this.peerConnection = null;
         this.dataChannel = null;
         this.callback = null;
         this.localStream = null;
         this.remoteClientId = null;
 
-        this.signalingClient = new WebrtcSignalingClient("slave", signalingUrl);
+        this.signalingClient = new WebrtcSignalingClient(role, signalingUrl);
 
         this.signalingClient.on('open', async () => {
             if (this.callback) this.callback('signaling', { type: 'opened' });
@@ -29,6 +29,7 @@ class WebrtcSlave {
         });
 
         this.signalingClient.on('iceCandidate', async (candidate, remoteClientId) => {
+            console.log("signalingClient.on 'iceCandidate'");
             if( this.remoteClientId != remoteClientId )
                 return;
 
@@ -53,12 +54,13 @@ class WebrtcSlave {
             this.dataChannel = this.peerConnection.createDataChannel(dataLabel);
             this.peerConnection.addEventListener("datachannel", event => {
                 event.channel.addEventListener("message", (e) => {
-                    if (this.callback) this.callback("data", { type: "message", data: e.data, label: e.target.label });
+                    if (this.callback) this.callback("data", { type: "message", remoteClientId: remoteClientId, data: e.data, label: e.target.label });
                 });
             });
         }
 
         this.peerConnection.addEventListener('icecandidate', async ({ candidate }) => {
+            console.log("sendIceCandidate 'iceCandidate'");
             this.signalingClient.sendIceCandidate(candidate, remoteClientId);
         });
 
@@ -86,19 +88,19 @@ class WebrtcSlave {
         });
     }
 
-    async startOffering(offering0){
+    async startOffering(init){
         var offer = await this.peerConnection.createOffer({
             offerToReceiveAudio: true,
             offerToReceiveVideo: true,
         });
         await this.peerConnection.setLocalDescription(offer);
 
-        if( offering0 ){
-            this.signalingClient.sendSdpOffer0(offer, this.remoteClientId);
-            if (this.callback) this.callback('peer', { type: 'sdpOffering0' });
+        if( init ){
+            this.signalingClient.sendSdpOffer1(offer, this.remoteClientId);
+            if (this.callback) this.callback('peer', { type: 'sdpOffering1' });
         }else{
-            this.signalingClient.sendSdpOffer(offer, this.remoteClientId);
-            if (this.callback) this.callback('peer', { type: 'sdpOffering' });
+            this.signalingClient.sendSdpOffer2(offer, this.remoteClientId);
+            if (this.callback) this.callback('peer', { type: 'sdpOffering2' });
         }
     }
 
@@ -144,7 +146,7 @@ class WebrtcSlave {
         let dataLabel = params.dataLabel;
         let autoSlaveConnect = params.autoSlaveConnect;
 
-        this.signalingClient.on('sdpOffer0', async (offer, remoteClientId) => {
+        this.signalingClient.on('sdpOffer1', async (offer, remoteClientId) => {
             if( !autoSlaveConnect )
                 return;
             if( !this.peerConnection )
@@ -156,7 +158,7 @@ class WebrtcSlave {
             await this.startOffering();
         });
 
-        this.signalingClient.on('sdpOffer', async (offer, remoteClientId) => {
+        this.signalingClient.on('sdpOffer2', async (offer, remoteClientId) => {
             if( this.remoteClientId != remoteClientId )
                 return;
             this.processOffer(remoteClientId, offer, this.localStream);

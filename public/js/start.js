@@ -4,7 +4,7 @@
 //const remoteConsole = new RemoteConsole("http://[remote server]/logio-post");
 //window.datgui = new dat.GUI();
 
-const defaultDataLabel = "dataLabel";
+const defaultDataLabel = "defaultDataLabel";
 const configName_clientId = "webrtc_clientId";
 const configName_channelId = "webrtc_channelId";
 const configName_password = "webrtc_password";
@@ -18,7 +18,7 @@ var vue_options = {
     data: {
         param_select: {
             selectingRole: "slave",
-            localstream_type: ""
+            localStreamType: ""
         },
         dataLabel: defaultDataLabel,
         has_displaymedia: false,
@@ -38,7 +38,7 @@ var vue_options = {
     methods: {
         select_role: async function(){
             try{
-                await this.attach_video(this.param_select.localstream_type);
+                await this.attach_video(this.param_select.localStreamType);
 
                 this.dialog_close("#select_role_dialog");
 
@@ -53,23 +53,25 @@ var vue_options = {
                     this.slave = new WebrtcSlave(this.signalingUrl);
                     await this.start_slave(this.currentChannelId, this.currentClientId, this.param_select.password, false);
                 }else if( this.param_select.selectingRole == "direct" ){
-                    this.slave = new WebrtcSlave(this.signalingUrl);
+                    this.slave = new WebrtcSlave(this.signalingUrl, "direct");
                     await this.start_slave(this.currentChannelId, this.currentClientId, this.param_select.password, true);
                 }
-                localStorage.setItem(configName_clientId, this.param_select.clientId);
                 localStorage.setItem(configName_channelId, this.param_select.channelId);
+                localStorage.setItem(configName_clientId, this.param_select.clientId);
                 localStorage.setItem(configName_password, this.param_select.password);
             }catch(error){
                 console.error(error);
                 alert(error);
             }
         },
+
         connect_direct: async function(remoteClient){
             this.dialog_close('#client_list_dialog');
 
             this.currentRemoteClient = remoteClient;
             this.slave.connect(remoteClient.clientId, { localStream: this.localStream, dataLabel: this.dataLabel});
         },
+
         open_client_list: async function(){
             var input = {
                 method: "GET",
@@ -97,14 +99,14 @@ var vue_options = {
             }
         },
 
-        attach_video: async function(localstream_type){
-            if( !localstream_type){
+        attach_video: async function(localStreamType){
+            if( !localStreamType){
                 this.localStream = null;
             }else
-            if (localstream_type == 'screen') {
+            if (localStreamType == 'screen') {
                 this.localStream = await navigator.mediaDevices.getDisplayMedia({ video: {}, audio: true });
             } else{
-                var facingMode = (localstream_type == 'camera_enviroment') ? 'environment' : 'user';
+                var facingMode = (localStreamType == 'camera_enviroment') ? 'environment' : 'user';
                 const constraints = {
                     video: { facingMode: facingMode },
                     audio: { echoCancellation: true, noiseSuppression: true },
@@ -134,7 +136,7 @@ var vue_options = {
                 await this.master.start(params, (type, result) => {
                     console.log(type, result);
                     if (type == "peer") {
-                        if (result.type == "sdpOffering") {
+                        if (result.type == "sdpOffering1" || result.type == "sdpOffering2") {
                             tracks = [];
                         } else
                         if (result.type == "track") {
@@ -155,7 +157,7 @@ var vue_options = {
                         }
                     }else if( type == "data" ){
                         if( result.type == "message" ){
-                            this.dataMessageLog += `(${result.remoteClientId}) ${result.data}\n`;
+                            this.dataMessageLog += `${this.toLocaleString(new Date().getTime())} [${result.remoteClientId}] ${result.data}\n`;
                         }
                     }
                 });
@@ -163,6 +165,7 @@ var vue_options = {
                 this.toast_show(error);
             }
         },
+
         start_slave: async function (channelId, clientId, password, autoSlaveConnect) {
             try {
                 var params = {
@@ -175,7 +178,7 @@ var vue_options = {
                 await this.slave.start(params, (module, result) => {
                     console.log(module, result);
                     if (module == "peer") {
-                        if (result.type == "sdpOffering") {
+                        if (result.type == "sdpOffering1" || result.type == "sdpOffering2") {
                             tracks = [];
                         } else
                         if (result.type == "track") {
@@ -198,8 +201,7 @@ var vue_options = {
                     } else if (module == "signaling") {
                         if (result.type == "ready") {
                             if( this.currentRole == "slave"){
-                                if (result.remoteClientList.length == 0) {
-                                }else{
+                                if (result.remoteClientList.length > 0) {
                                     this.selectingRemoteClientList = result.remoteClientList;
                                     this.dialog_open("#connect_dialog");
                                 }
@@ -213,7 +215,7 @@ var vue_options = {
                         }
                     }else if( module == "data" ){
                         if( result.type == "message"){
-                            this.dataMessageLog += `${result.data}\n`;
+                            this.dataMessageLog += `${this.toLocaleString(new Date().getTime())} [${result.remoteClientId}] ${result.data}\n`;
                         }
                     }
                 });
@@ -222,6 +224,7 @@ var vue_options = {
                 this.toast_show(error);
             }
         },
+
         sendDataMessage: async function(){
             console.log("sendDataMessage called");
             if(this.currentRole == "master"){
@@ -233,6 +236,7 @@ var vue_options = {
                 this.slave.sendMessage(this.dataMessage);
             }
         },
+
         onResize: function () {
             this.$nextTick(() => {
                 var video = document.querySelector('#remotecamera_view');
@@ -259,8 +263,8 @@ var vue_options = {
         this.param_select = {
             clientId: localStorage.getItem(configName_clientId) || "test",
             selectingRole: "slave",
-            localstream_type: "",
-            channelId: localStorage.getItem(configName_channelId) || "",
+            localStreamType: "",
+            channelId: localStorage.getItem(configName_channelId) || "test",
             password: localStorage.getItem(configName_password) || ""
         };
         this.dialog_open("#select_role_dialog");
