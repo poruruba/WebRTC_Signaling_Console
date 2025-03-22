@@ -113,7 +113,7 @@ exports.ws_handler = async (event, context) => {
       if( client_item.role == "master" ){
         // masterの場合：各クライアントにreadyを返却
         for( let item of channel_item.clients ){
-          if( item.clientId == client_item.clientId || item.role == 'master')
+          if( item.clientId == client_item.clientId || item.role != 'slave')
             continue;
           await context.wslib.postToConnection({
             ConnectionId: item.connectionId,
@@ -133,7 +133,7 @@ exports.ws_handler = async (event, context) => {
         // slaveの場合： 現在コネクションの返却
         var clients = [];
         for( let item of channel_item.clients ){
-          if( item.clientId == client_item.clientId || item.role == 'slave' )
+          if( item.clientId == client_item.clientId || item.role != 'master' )
             continue;
           clients.push({
             role: item.role,
@@ -149,9 +149,30 @@ exports.ws_handler = async (event, context) => {
             clients: clients
           })
         }, null);
-      }   
+      }else
+      if( client_item.role == "direct" ){
+        // directの場合： 現在コネクションの返却
+        var clients = [];
+        for( let item of channel_item.clients ){
+          if( item.clientId == client_item.clientId || item.role != 'direct' )
+            continue;
+          clients.push({
+            role: item.role,
+            clientId: item.clientId,
+            state: item.state
+          });
+        }
+        await context.wslib.postToConnection({
+          ConnectionId: client_item.connectionId,
+          Data: JSON.stringify({
+            type: "ready",
+            clientId: client_item.clientId,
+            clients: clients
+          })
+        }, null);
+      }      
     }else
-    if( body.type == "sdpOffer0" || body.type == "sdpOffer" || body.type == "sdpAnswer" || body.type == "iceCandidate" ){
+    if( body.type == "sdpOffer1" || body.type == "sdpOffer2" || body.type == "sdpAnswer" || body.type == "iceCandidate" ){
       // 通信内容をターゲットクライアントに転送
       var item = channel_item.clients.find(item => item.clientId == body.target );
       if( item ){
@@ -163,7 +184,7 @@ exports.ws_handler = async (event, context) => {
             data: body.data
           })
         }, null);
-        if( body.type == "sdpOffer0" || body.type == "sdpOffer") client_item.state = "offering";
+        if( body.type == "sdpOffer1" || body.type == "sdpOffer2") client_item.state = "offering";
         else if( body.type == "sdpAnswer" ) item.state = "answered";
       }
     } 
